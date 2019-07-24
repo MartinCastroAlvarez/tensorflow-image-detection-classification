@@ -28,7 +28,8 @@ Install the virtual environment.
 virtualenv -p python3 .env
 source .env/bin/activate
 ```
-Execute the AI script:
+First, download the datasets from [here](http://btsd.ethz.ch/shareddata/)
+Then, txecute the AI script:
 ```bash
 clear; python3 think.py
 ```
