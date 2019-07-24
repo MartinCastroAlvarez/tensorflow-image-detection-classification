@@ -2,4 +2,4 @@
 .env/
 .think.py.swp
 *.swp
-data/
+./data/*
