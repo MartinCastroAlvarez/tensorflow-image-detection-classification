@@ -444,7 +444,8 @@ class DatasetSampleDiagram(DatasetDiagram):
         for i, image in enumerate(random.sample(self.train_set.images, self.COLS)):
             img = cv2.imread(image.path)
             self.axis[i].imshow(img)
-            # plt.subplots_adjust(wspace=0.5)
+            self.axis[i].axis('off')
+        self.figure.subplots_adjust(wspace=0.5)
         Diagram.draw(self)
 
 
