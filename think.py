@@ -139,7 +139,7 @@ class Directory(File):
         return len(self.files) + len(self.directories)
 
 
-class Image(File):
+class ImageFile(File):
     """
     Image entity.
     """
@@ -173,29 +173,29 @@ class Image(File):
         return skimage.data.imread(self.path)
 
 
-class Label(Directory):
+class LabelDirectory(Directory):
     """
     Data label entity.
     """
 
     @property
     @lru_cache()
-    def images(self) -> typing.Set[Image]:
+    def images(self) -> typing.Set[ImageFile]:
         """
         Public method to access data files.
         For example:
         >>> {
-        ...     Image("data/00011/a.img"),
-        ...     Image("data/00011/b.img"),
-        ...     Image("data/00011/c.img"),
+        ...     ImageFile("data/00011/a.img"),
+        ...     ImageFile("data/00011/b.img"),
+        ...     ImageFile("data/00011/c.img"),
         ...     [...]
         ... }
         """
         logger.debug("Listing images | sf_path=%s", self.path)
         return {
-            Image(file_.path)
+            ImageFile(file_.path)
             for file_ in self.files
-            if Image.is_valid(file_.path)
+            if ImageFile.is_valid(file_.path)
         }
 
 
@@ -209,20 +209,20 @@ class Dataset(Directory):
 
     @property
     @lru_cache()
-    def labels(self) -> typing.Set[Label]:
+    def labels(self) -> typing.Set[LabelDirectory]:
         """
         Data labels getter.
         For example:
         >>> {
-        ...     Label("00011"),
-        ...     Label("00021"),
-        ...     Label("00013"),
+        ...     LabelDirectory("00011"),
+        ...     LabelDirectory("00021"),
+        ...     LabelDirectory("00013"),
         ...     [...]
         ... }
         """
         logger.debug("Listing labels | sf_path=%s", self.path)
         return {
-            Label(directory.path)
+            LabelDirectory(directory.path)
             for directory in self.directories
         }
 
@@ -350,7 +350,40 @@ class Diagram:
         self.figure.savefig(self.path)
 
 
-class DatasetHistogram(Diagram):
+class DatasetDiagram(Diagram):
+    """
+    Dataset chart.
+    """
+
+    def __init__(self, test_set: Dataset, train_set: Dataset) -> None:
+        """
+        Diagram constructor.
+        """
+        logger.debug("Constructing Dataset Diagram.")
+        if not isinstance(train_set, Dataset):
+            raise TypeError("Expecting Dataset, got:", type(train_set))
+        if not isinstance(test_set, Dataset):
+            raise TypeError("Expecting Dataset, got:", type(test_set))
+        self.__test_set = test_set
+        self.__train_set = train_set
+        Diagram.__init__(self)
+
+    @property
+    def train_set(self):
+        """
+        Train set getter.
+        """
+        return self.__train_set
+
+    @property
+    def test_set(self):
+        """
+        Test set getter.
+        """
+        return self.__test_set
+
+
+class DatasetHistogramDiagram(DatasetDiagram):
     """
     Dataset Histogram chart.
     """
@@ -366,32 +399,43 @@ class DatasetHistogram(Diagram):
     TRAIN_SUBTITLE = "Training Labels"
     TEST_SUBTITLE = "Testing Labels"
 
-    def __init__(self, test_set: Dataset, train_set: Dataset) -> None:
+    def draw(self) -> None:
         """
-        Diagram constructor.
+        Public method to draw histograms.
         """
-        logger.debug("Constructing Dataset Histogram.")
-        if not isinstance(train_set, Dataset):
-            raise TypeError("Expecting Dataset, got:", type(train_set))
-        if not isinstance(test_set, Dataset):
-            raise TypeError("Expecting Dataset, got:", type(test_set))
-        self.__test_set = test_set
-        self.__train_set = train_set
-        Diagram.__init__(self)
+        logger.debug("Drawing Histogram | sf_train=%s | sf_test=%s", self.train_set, self.test_set)
+        self.axis[0].hist(self.train_set.histogram, len(self.train_set.frequencies))
+        self.axis[0].set_title(self.TRAIN_SUBTITLE)
+        self.axis[0].set_xlabel(self.LABELS[0])
+        self.axis[0].set_ylabel(self.LABELS[1])
+        self.axis[1].hist(self.test_set.histogram, len(self.test_set.frequencies))
+        self.axis[1].set_title(self.TEST_SUBTITLE)
+        self.axis[1].set_xlabel(self.LABELS[0])
+        self.axis[1].set_ylabel(self.LABELS[1])
+        Diagram.draw(self)
+
+
+class DatasetSampleDiagram(DatasetDiagram):
+    """
+    Diagram that shows random data.
+    """
+
+    TITLE = "Random Sample"
+
+    ROWS = 1
+    COLS = 4
 
     def draw(self) -> None:
         """
         Public method to draw histograms.
         """
-        logger.debug("Drawing Histogram | sf_train=%s | sf_test=%s",
-                     self.__train_set, self.__test_set)
-        self.axis[0].hist(self.__train_set.histogram,
-                          len(self.__train_set.frequencies))
+        logger.debug("Drawing Sample | sf_train=%s | sf_test=%s", self.train_set, self.test_set)
+        raise Exception(self.axis)
+        self.axis[0].hist(self.train_set.histogram, len(self.train_set.frequencies))
         self.axis[0].set_title(self.TRAIN_SUBTITLE)
         self.axis[0].set_xlabel(self.LABELS[0])
         self.axis[0].set_ylabel(self.LABELS[1])
-        self.axis[1].hist(self.__test_set.histogram,
-                          len(self.__test_set.frequencies))
+        self.axis[1].hist(self.test_set.histogram, len(self.test_set.frequencies))
         self.axis[1].set_title(self.TEST_SUBTITLE)
         self.axis[1].set_xlabel(self.LABELS[0])
         self.axis[1].set_ylabel(self.LABELS[1])
@@ -427,7 +471,8 @@ class Main:
         Public method to draw diagrams.
         """
         logger.debug("Drawing diagrams.")
-        DatasetHistogram(self.__train_set, self.__test_set).draw()
+        DatasetSampleDiagram(self.__train_set, self.__test_set).draw()
+        DatasetHistogramDiagram(self.__train_set, self.__test_set).draw()
 
 if __name__ == "__main__":
     Main.run()
