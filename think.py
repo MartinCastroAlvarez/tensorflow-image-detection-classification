@@ -292,12 +292,12 @@ test: Dataset = Dataset(Config.TESTING_DATASET)
 
 fig, axis = plt.subplots(2, 1, constrained_layout=True)
 
-axis[0].hist(train.histogram, 20)
+axis[0].hist(train.histogram, len(train.frequencies))
 axis[0].set_title('Training Dataset')
 axis[0].set_xlabel('Labels')
 axis[0].set_ylabel('Images')
 
-axis[1].hist(test.histogram, 20)
+axis[1].hist(test.histogram, len(test.frequencies))
 axis[1].set_title('Testing Dataset')
 axis[1].set_xlabel('Labels')
 axis[1].set_ylabel('Images')
