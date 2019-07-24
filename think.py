@@ -7,6 +7,7 @@ import sys
 import typing
 import logging
 
+from slugify import slugify
 from functools import lru_cache
 
 import skimage
@@ -14,15 +15,7 @@ import tensorflow as tf
 
 import matplotlib.pyplot as plt
 
-# Printing logs to console.
-# Reference: https://stackoverflow.com/questions/14058453
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 
 class File:
@@ -228,6 +221,26 @@ class Dataset(Directory):
 
     @property
     @lru_cache()
+    def images(self) -> typing.Set[ImageFile]:
+        """
+        Data images getter.
+        For example:
+        >>> {
+        ...     ImageFile("00011"),
+        ...     ImageFile("00012"),
+        ...     ImageFile("00013"),
+        ...     [...]
+        ... }
+        """
+        logger.debug("Listing images | sf_path=%s", self.path)
+        return {
+            image
+            for label in self.labels
+            for image in label.images
+        }
+
+    @property
+    @lru_cache()
     def frequencies(self) -> dict:
         """
         Public method to return the frequencies for each label.
@@ -292,7 +305,7 @@ class Diagram:
     COLS = 1
 
     PATH = os.path.join("plot")
-    NAME = ""
+    FORMAT = ".png"
 
     def __init__(self) -> None:
         """
@@ -313,9 +326,7 @@ class Diagram:
         """
         Diagram path getter.
         """
-        if not self.NAME:
-            raise RuntimeError("Expecting diagram file name.")
-        return os.path.join(self.PATH, self.NAME)
+        return os.path.join(self.PATH, slugify(self.TITLE) + self.FORMAT)
 
     def __get_subplot(self) -> typing.Tuple:
         """
@@ -388,8 +399,6 @@ class DatasetHistogramDiagram(DatasetDiagram):
     Dataset Histogram chart.
     """
 
-    NAME = "data_histogram.png"
-
     TITLE = "Data Histogram"
     LABELS = ("Labels", "Images")
 
@@ -430,15 +439,12 @@ class DatasetSampleDiagram(DatasetDiagram):
         Public method to draw histograms.
         """
         logger.debug("Drawing Sample | sf_train=%s | sf_test=%s", self.train_set, self.test_set)
-        raise Exception(self.axis)
-        self.axis[0].hist(self.train_set.histogram, len(self.train_set.frequencies))
-        self.axis[0].set_title(self.TRAIN_SUBTITLE)
-        self.axis[0].set_xlabel(self.LABELS[0])
-        self.axis[0].set_ylabel(self.LABELS[1])
-        self.axis[1].hist(self.test_set.histogram, len(self.test_set.frequencies))
-        self.axis[1].set_title(self.TEST_SUBTITLE)
-        self.axis[1].set_xlabel(self.LABELS[0])
-        self.axis[1].set_ylabel(self.LABELS[1])
+        import random
+        import cv2
+        for i, image in enumerate(random.sample(self.train_set.images, self.COLS)):
+            img = cv2.imread(image.path)
+            self.axis[i].imshow(img)
+            # plt.subplots_adjust(wspace=0.5)
         Diagram.draw(self)
 
 
@@ -475,4 +481,15 @@ class Main:
         DatasetHistogramDiagram(self.__train_set, self.__test_set).draw()
 
 if __name__ == "__main__":
+
+    # Printing logs to console.
+    # Reference: https://stackoverflow.com/questions/14058453
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # Running Main handler.
     Main.run()
