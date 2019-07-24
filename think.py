@@ -279,28 +279,155 @@ class Dataset(Directory):
         )
 
 
-class Config:
+class Diagram:
     """
-    App configuration.
+    Chat diagram entity.
     """
+
+    FONT_SIZE = 16
+    TITLE = "My Little Diagram"
+    LABELS = ("", "")
+
+    ROWS = 1
+    COLS = 1
+
+    PATH = os.path.join("plot")
+    NAME = ""
+
+    def __init__(self) -> None:
+        """
+        Diagram constructor.
+        """
+        logger.debug("Constructing Diagram.")
+        self.__figure: typing.Optional['matplotlib.figure.Figure'] = None
+        self.__axis : typing.Optional['matplotlib.axes._subplots.AxesSubplot'] = None
+
+    def __str__(self) -> str:
+        """
+        String serializer.
+        """
+        return "<{}>".format(self.__class__.__name__)
+
+    @property
+    def path(self) -> str:
+        """
+        Diagram path getter.
+        """
+        if not self.NAME:
+            raise RuntimeError("Expecting diagram file name.")
+        return os.path.join(self.PATH, self.NAME)
+
+    def __get_subplot(self) -> typing.Tuple:
+        """
+        Private Subplot generator.
+        """
+        return plt.subplots(self.ROWS, self.COLS, constrained_layout=True)
+
+    @property
+    def figure(self) -> 'matplotlib.figure.Figure':
+        """
+        Maptlot figure getter.
+        """
+        if self.__figure is None:
+            self.__figure, self.__axis = self.__get_subplot()
+        return self.__figure
+
+    @property
+    def axis(self) -> 'matplotlib.axes._subplots.AxesSubplot':
+        """
+        Maptlot axis getter.
+        """
+        if self.__axis is None:
+            self.__figure, self.__axis = self.__get_subplot()
+        return self.__axis
+
+    def draw(self, *args, **kwargs) -> None:
+        """
+        Public method to draw diagram.
+        """
+        logger.debug("Drawing %s", self)
+        self.figure.suptitle(self.TITLE, fontsize=self.FONT_SIZE)
+        self.figure.savefig(self.path)
+
+
+class DatasetHistogram(Diagram):
+    """
+    Dataset Histogram chart.
+    """
+
+    NAME = "data_histogram.png"
+
+    TITLE = "Data Histogram"
+    LABELS = ("Labels", "Images")
+
+    ROWS = 2
+    COLS = 1
+
+    TRAIN_SUBTITLE = "Training Labels"
+    TEST_SUBTITLE = "Testing Labels"
+
+    def __init__(self, test_set: Dataset, train_set: Dataset) -> None:
+        """
+        Diagram constructor.
+        """
+        logger.debug("Constructing Dataset Histogram.")
+        if not isinstance(train_set, Dataset):
+            raise TypeError("Expecting Dataset, got:", type(train_set))
+        if not isinstance(test_set, Dataset):
+            raise TypeError("Expecting Dataset, got:", type(test_set))
+        self.__test_set = test_set
+        self.__train_set = train_set
+        Diagram.__init__(self)
+
+    def draw(self) -> None:
+        """
+        Public method to draw histograms.
+        """
+        logger.debug("Drawing Histogram | sf_train=%s | sf_test=%s",
+                     self.__train_set, self.__test_set)
+        self.axis[0].hist(self.__train_set.histogram,
+                          len(self.__train_set.frequencies))
+        self.axis[0].set_title(self.TRAIN_SUBTITLE)
+        self.axis[0].set_xlabel(self.LABELS[0])
+        self.axis[0].set_ylabel(self.LABELS[1])
+        self.axis[1].hist(self.__test_set.histogram,
+                          len(self.__test_set.frequencies))
+        self.axis[1].set_title(self.TEST_SUBTITLE)
+        self.axis[1].set_xlabel(self.LABELS[0])
+        self.axis[1].set_ylabel(self.LABELS[1])
+        Diagram.draw(self)
+
+
+class Main:
+    """
+    Main class.
+    """
+
     TESTING_DATASET = os.path.join("data", "testing")
     TRAINING_DATASET = os.path.join("data", "training")
 
+    @classmethod
+    def run(cls) -> None:
+        """
+        Main handler.
+        """
+        main = cls()
+        main.draw()
 
-train: Dataset = Dataset(Config.TRAINING_DATASET)
-test: Dataset = Dataset(Config.TESTING_DATASET)
+    def __init__(self) -> None:
+        """
+        Main constructor.
+        """
+        logger.debug("Initializing Main.")
+        self.__train_set: Dataset = Dataset(self.TRAINING_DATASET)
+        self.__test_set: Dataset = Dataset(self.TESTING_DATASET)
 
-fig, axis = plt.subplots(2, 1, constrained_layout=True)
+    def draw(self) -> None:
+        """
+        Public method to draw diagrams.
+        """
+        logger.debug("Drawing diagrams.")
+        DatasetHistogram(self.__train_set, self.__test_set).draw()
 
-axis[0].hist(train.histogram, len(train.frequencies))
-axis[0].set_title('Training Dataset')
-axis[0].set_xlabel('Labels')
-axis[0].set_ylabel('Images')
-
-axis[1].hist(test.histogram, len(test.frequencies))
-axis[1].set_title('Testing Dataset')
-axis[1].set_xlabel('Labels')
-axis[1].set_ylabel('Images')
-
-fig.suptitle('Data Histogram', fontsize=16)
-fig.savefig('data_histogram.png')
+if __name__ == "__main__":
+    Main.run()

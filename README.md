@@ -20,7 +20,7 @@ TensorFlow provides primitives for defining functions on tensors and automatical
 
 ## Data Visualization
 ####
-![histogram-alt](./data_histogram.png)
+![histogram-alt](./plot/data_histogram.png)
 
 ## Usage
 Install the virtual environment.
