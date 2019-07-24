@@ -5,11 +5,13 @@ Tensor Flow examples.
 import os
 import sys
 import typing
+import random
 import logging
 
 from slugify import slugify
 from functools import lru_cache
 
+import cv2
 import skimage
 import tensorflow as tf
 
@@ -431,7 +433,7 @@ class DatasetSampleDiagram(DatasetDiagram):
 
     TITLE = "Random Sample"
 
-    ROWS = 1
+    ROWS = 3
     COLS = 4
 
     def draw(self) -> None:
@@ -439,12 +441,11 @@ class DatasetSampleDiagram(DatasetDiagram):
         Public method to draw histograms.
         """
         logger.debug("Drawing Sample | sf_train=%s | sf_test=%s", self.train_set, self.test_set)
-        import random
-        import cv2
-        for i, image in enumerate(random.sample(self.train_set.images, self.COLS)):
-            img = cv2.imread(image.path)
-            self.axis[i].imshow(img)
-            self.axis[i].axis('off')
+        sample = random.sample(self.train_set.images, self.COLS * self.ROWS)
+        for i in range(self.ROWS):
+            for j in range(self.COLS):
+                self.axis[i][j].imshow(cv2.imread(sample.pop().path))
+                self.axis[i][j].axis('off')
         self.figure.subplots_adjust(wspace=0.5)
         Diagram.draw(self)
 
