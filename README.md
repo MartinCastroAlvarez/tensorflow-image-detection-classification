@@ -20,9 +20,7 @@ TensorFlow provides primitives for defining functions on tensors and automatical
 ```
 
 ## Data Visualization
-#### Dataset Labels Histogram
 ![histogram-alt](./plot/data-histogram.png)
-#### Dataset Random Sample
 ![sample-alt](./plot/random-sample.png)
 
 ## Usage
