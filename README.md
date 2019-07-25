@@ -11,6 +11,7 @@ This system is intended to analyze Belgium traffic data.
 - [Python3 LRU Cache](https://docs.python.org/dev/library/functools.html#functools.lru_cache)
 - [Matplotlib](https://matplotlib.org/3.1.1/gallery/subplots_axes_and_figures/figure_title.html)
 - [OpenCV2](https://pypi.org/project/opencv-python/)
+- [Save and restore in TensorFlow](https://www.tensorflow.org/guide/saved_model)
 
 ## Why TensorFlow?
 ```
@@ -20,8 +21,9 @@ TensorFlow provides primitives for defining functions on tensors and automatical
 ```
 
 ## Data Visualization
-![histogram-alt](./plot/data-histogram.png)
 ![sample-alt](./plot/random-sample.png)
+![histogram-alt](./plot/data-histogram.png)
+![predictions-alt](./plot/sample-predictions.png)
 
 ## Usage
 Install the virtual environment.

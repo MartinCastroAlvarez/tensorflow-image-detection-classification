@@ -4,3 +4,4 @@
 *.swp
 ./data/*
 data/
+.mypy_cache

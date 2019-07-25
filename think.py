@@ -3,16 +3,18 @@ Tensor Flow examples.
 """
 
 import os
-import sys
 import typing
 import random
 import logging
 
-from slugify import slugify
 from functools import lru_cache
+from slugify import slugify
 
-import cv2
+import numpy as np
+
+# import cv2
 import skimage
+from skimage.color import rgb2gray
 import tensorflow as tf
 
 import matplotlib.pyplot as plt
@@ -152,7 +154,8 @@ class ImageFile(File):
             raise ValueError("Name is required.")
         return File.is_valid(path) and path.endswith(cls.SUFFIX)
 
-    def to_array(self) -> list:
+    @lru_cache()
+    def to_array(self, size: int = None, gray: bool = False) -> np.array:
         """
         Array serializer.
         For example:
@@ -163,9 +166,17 @@ class ImageFile(File):
         ...     [...]
         ... ]
         """
-        logger.debug("Exporting to Array | sf_path=%s", self.path)
-        raise Exception(type(skimage.data.imread(self.path)))
-        return skimage.data.imread(self.path)
+        logger.debug("Exporting to Array | sf_path=%s | sf_size=%s", self.path, size)
+        array: np.ndarray = skimage.data.imread(self.path)
+        if size is not None:
+            if not isinstance(size, int):
+                raise TypeError("Expecting int, got:", type(size))
+            if size < 1:
+                raise ValueError("Invalid size.")
+            array = skimage.transform.resize(array, (size, size))
+        if gray:
+            array = rgb2gray(array)
+        return array
 
 
 class LabelDirectory(Directory):
@@ -266,7 +277,10 @@ class Dataset(Directory):
             for _ in label.images
         ]
 
-    def to_json(self) -> typing.Generator:
+    @lru_cache()
+    def to_array(self,
+                 size: int = None,
+                 gray: bool = False) -> typing.List[typing.List]:
         """
         Dataset serializer.
         For example:
@@ -284,14 +298,11 @@ class Dataset(Directory):
         ... ]
         """
         logger.debug("Exporting to JSON | sf_path=%s", self.path)
-        return (
-            {
-                self.LABEL: label.name,
-                self.IMAGE: image.to_array()
-            }
+        return [
+            [image.to_array(size=size, gray=gray), label.name]
             for label in self.labels
             for image in label.images
-        )
+        ]
 
 
 class Diagram:
@@ -299,7 +310,7 @@ class Diagram:
     Chat diagram entity.
     """
 
-    FONT_SIZE = 16
+    FONT_SIZE = 12
     TITLE = "My Little Diagram"
     LABELS = ("", "")
 
@@ -314,8 +325,8 @@ class Diagram:
         Diagram constructor.
         """
         logger.debug("Constructing Diagram.")
-        self.__figure: typing.Optional['matplotlib.figure.Figure'] = None
-        self.__axis : typing.Optional['matplotlib.axes._subplots.AxesSubplot'] = None
+        self.__figure: typing.Optional[plt.figure] = None
+        self.__axis: typing.Optional[plt.axes] = None
 
     def __str__(self) -> str:
         """
@@ -337,7 +348,7 @@ class Diagram:
         return plt.subplots(self.ROWS, self.COLS, constrained_layout=True)
 
     @property
-    def figure(self) -> 'matplotlib.figure.Figure':
+    def figure(self) -> plt.figure:
         """
         Maptlot figure getter.
         """
@@ -346,7 +357,7 @@ class Diagram:
         return self.__figure
 
     @property
-    def axis(self) -> 'matplotlib.axes._subplots.AxesSubplot':
+    def axis(self) -> plt.axes:
         """
         Maptlot axis getter.
         """
@@ -354,7 +365,7 @@ class Diagram:
             self.__figure, self.__axis = self.__get_subplot()
         return self.__axis
 
-    def draw(self, *args, **kwargs) -> None:
+    def draw(self) -> None:
         """
         Public method to draw diagram.
         """
@@ -444,10 +455,192 @@ class DatasetSampleDiagram(DatasetDiagram):
         sample = random.sample(self.train_set.images, self.COLS * self.ROWS)
         for i in range(self.ROWS):
             for j in range(self.COLS):
-                self.axis[i][j].imshow(cv2.imread(sample.pop().path))
+                self.axis[i][j].imshow(skimage.data.imread(sample.pop().path))
                 self.axis[i][j].axis('off')
-        self.figure.subplots_adjust(wspace=0.5)
         Diagram.draw(self)
+
+
+class SamplePredictionDiagram(Diagram):
+    """
+    Sample prediction diagram.
+    """
+
+    TITLE = "Sample Predictions"
+
+    ROWS = 5
+    COLS = 3
+
+    WSPACE = 0.5
+
+    def __init__(self, x: list, y: list, y_hat: np.ndarray) -> None:
+        """
+        Diagram constructor.
+        """
+        logger.debug("Constructing Sample Dataset Diagram.")
+        if not isinstance(x, list):
+            raise TypeError("Expecting list, got:", type(x))
+        if not isinstance(y, list):
+            raise TypeError("Expecting list, got:", type(y))
+        if not isinstance(y_hat, list):
+            raise TypeError("Expecting array, got:", type(y_hat))
+        if not x:
+            raise ValueError("Empty sample training X set.")
+        if not y:
+            raise ValueError("Empty sample training Y set.")
+        if not y_hat:
+            raise ValueError("Empty sample predicted set.")
+        if len(x) != len(y_hat):
+            raise ValueError("Training and predicted samples' size not equal.")
+        if len(y) != len(y_hat):
+            raise ValueError("Training and predicted samples' size not equal.")
+        if self.COLS * self.ROWS > len(x):
+            raise RuntimeError("Sample training set is too small. Try:", self.COLS * self.ROWS)
+        self.__x = x
+        self.__y = y
+        self.__y_hat = y_hat
+        Diagram.__init__(self)
+
+    def draw(self) -> None:
+        """
+        Public method to draw histograms.
+        """
+        logger.debug("Drawing Sample | sf_train=%s | sf_predicted=%s", self.__y, self.__y_hat)
+        # fig = plt.figure(figsize=(10, 10))
+        k = 0
+        for i in range(self.ROWS):
+            for j in range(self.COLS):
+                logger.debug("Drawing Sample | sf_image=%s", k)
+                truth = self.__y[k]
+                prediction = self.__y_hat[k]
+                color = 'green' if truth == prediction else 'red'
+                self.axis[i][j].axis('off')
+                text = "Y: {}\nȲ̂: {}".format(truth, prediction)
+                self.axis[i][j].text(40, 10, text, fontsize=self.FONT_SIZE, color=color)
+                self.axis[i][j].imshow(self.__x[k])
+                k += 1
+        Diagram.draw(self)
+
+
+class PredictionModel:
+    """
+    Prediction Model class.
+    """
+
+    def __init__(self, sample_size: int, epochs: int, path: str,
+                 learning_rate: float, scale: int, seed: int) -> None:
+        """
+        Main constructor.
+        """
+        logger.debug("Initializing Prediction Model.")
+        if not isinstance(path, str):
+            raise TypeError("Expecting str, got:", type(path))
+        if not isinstance(learning_rate, float):
+            raise TypeError("Expecting float, got:", type(learning_rate))
+        if not isinstance(seed, int):
+            raise TypeError("Expecting int, got:", type(seed))
+        if not isinstance(scale, int):
+            raise TypeError("Expecting int, got:", type(scale))
+        if not isinstance(epochs, int):
+            raise TypeError("Expecting int, got:", type(epochs))
+        if not isinstance(sample_size, int):
+            raise TypeError("Expecting sample_size, got:", type(sample_size))
+        self.__path = path
+        self.__learning_rate = learning_rate
+        self.__sample_size = sample_size
+        self.__epochs = epochs
+        self.__scale = scale
+        self.__seed = seed
+
+    def __str__(self) -> str:
+        """
+        String serializer.
+        """
+        return "<PredictionModel: {}".format(self.__learning_rate)
+
+    def learn(self, train_set: Dataset, test_set: Dataset) -> typing.Tuple:
+        """
+        Pubic method to learn.
+        """
+        logger.info("Learning. | sf_train=%s | sf_test=%s", train_set, test_set)
+        if not isinstance(train_set, Dataset):
+            raise TypeError("Expecting Dataset, got:", type(train_set))
+        if not isinstance(test_set, Dataset):
+            raise TypeError("Expecting Dataset, got:", type(test_set))
+        # Defining placeholders.
+        x = tf.placeholder(dtype=tf.float32, shape=[None, self.__scale, self.__scale])
+        y = tf.placeholder(dtype=tf.int32, shape=[None])
+        images_flat = tf.contrib.layers.flatten(x)
+        # Defining activation function.
+        logits = tf.contrib.layers.fully_connected(images_flat, 62, tf.nn.relu)
+        logger.debug("Training | sf_logits=%s", logits)
+        # Defining loss function.
+        tmp = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits)
+        loss = tf.reduce_mean(tmp)
+        logger.debug("Training | sf_loss=%s", loss)
+        # Defining an optimizer.
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.__learning_rate).minimize(loss)
+        logger.debug("Training | sf_optimizer=%s", optimizer)
+        # Converting logits to label indexes.
+        correct_pred = tf.argmax(logits, 1)
+        logger.debug("Training | sf_argmax=%s", correct_pred)
+        # Defining accuracy metric.
+        accuracy_metric = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        logger.debug("Training | sf_accuracy_metric=%s", accuracy_metric)
+        # Setting random rseed.
+        tf.compat.v1.set_random_seed(self.__seed)
+        logger.debug("Training | sf_random_seed=%s", self.__seed)
+        # Generating train and test datasets.
+        train = train_set.to_array(size=self.__scale, gray=True)
+        x_train = [x[0] for x in train]
+        y_train = [x[1] for x in train]
+        test = test_set.to_array(size=self.__scale, gray=True)
+        x_test = [x[0] for x in test]
+        y_test = [x[1] for x in test]
+        logger.debug("Training | sf_training=%s | sf_testing=%s", len(train), len(test))
+        # Add ops to save and restore all the variables.
+        saver = tf.train.Saver()
+        logger.debug("Training | sf_saver=%s", saver)
+        # Training the model.
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            for epoch in range(self.__epochs):
+                logger.debug('Training | sf_epoch=%s', epoch)
+                feed_dict = {x: x_train, y: y_train}
+                sess.run([optimizer, accuracy_metric], feed_dict=feed_dict)
+                if not epoch % 10:
+                    logger.info("Training | sf_epoch=%s | sf_loss=%s", epoch, loss)
+            # Calculating accuracy
+            y_predicted = sess.run([correct_pred], feed_dict={x: x_test})[0]
+            match_count = sum(
+                int(y == y_hat)
+                for y, y_hat in zip(y_test, y_predicted)
+            )
+            accuracy = match_count / len(y_test)
+            logger.info("Trained. | sf_accuracy=%s", accuracy)
+            # Obtaining a sample to draw a chart.
+            sample_indexes = random.sample(range(len(x_test)), self.__sample_size)
+            sample_x = [x_test[i] for i in sample_indexes]
+            sample_y = [y_test[i] for i in sample_indexes]
+            sample_y_hat = sess.run([correct_pred], feed_dict={x: sample_x})[0]
+            logger.debug("Trained. | sf_expected=%s | sf_predicted=%s", sample_y, sample_y_hat)
+            # Saving model to pkl file.
+            saver.save(sess, self.__path)
+        return accuracy, sample_x, sample_y, sample_y
+
+
+class Config:
+    """
+    Default config.
+    """
+    TRAINING_SAMPLE_SIZE = 15
+    LOG_LEVEL = logging.INFO
+    TESTING_DATASET_PATH = os.path.join("data", "testing")
+    TRAINING_DATASET_PATH = os.path.join("data", "training")
+    IMAGES_SCALE = 28
+    LEARNING_RATE = 0.001
+    RANDOM_SEED = 1234
+    EPOCHS = 100
+    MODEL_PATH = os.path.join("model.cpkl")
 
 
 class Main:
@@ -455,43 +648,73 @@ class Main:
     Main class.
     """
 
-    TESTING_DATASET = os.path.join("data", "testing")
-    TRAINING_DATASET = os.path.join("data", "training")
-
     @classmethod
-    def run(cls) -> None:
+    def run(cls, **kwargs) -> None:
         """
         Main handler.
         """
-        main = cls()
+        main = cls(**kwargs)
+        main.learn()
         main.draw()
 
-    def __init__(self) -> None:
+    def __init__(self,
+                 learning_rate: float = Config.LEARNING_RATE,
+                 images_scale: int = Config.IMAGES_SCALE,
+                 log_level: int = Config.LOG_LEVEL,
+                 epochs: int = Config.EPOCHS,
+                 model_path: str = Config.MODEL_PATH,
+                 random_seed: int = Config.RANDOM_SEED,
+                 training_sample_size: int = Config.TRAINING_SAMPLE_SIZE,
+                 train_set_path: str = Config.TRAINING_DATASET_PATH,
+                 test_set_path: str = Config.TESTING_DATASET_PATH) -> None:
         """
         Main constructor.
         """
         logger.debug("Initializing Main.")
-        self.__train_set: Dataset = Dataset(self.TRAINING_DATASET)
-        self.__test_set: Dataset = Dataset(self.TESTING_DATASET)
+        logger.setLevel(log_level)
+        self.__train_set: Dataset = Dataset(train_set_path)
+        self.__test_set: Dataset = Dataset(test_set_path)
+        self.__accuracy: float = 0
+        self.__sample_x: list = []
+        self.__sample_y: list = []
+        self.__sample_y_hat: list = []
+        self.__model: PredictionModel = PredictionModel(learning_rate=learning_rate,
+                                                        sample_size=training_sample_size,
+                                                        epochs=epochs,
+                                                        path=model_path,
+                                                        seed=random_seed,
+                                                        scale=images_scale)
 
     def draw(self) -> None:
         """
         Public method to draw diagrams.
         """
         logger.debug("Drawing diagrams.")
+        SamplePredictionDiagram(self.__sample_x,
+                                self.__sample_y,
+                                self.__sample_y_hat).draw()
         DatasetSampleDiagram(self.__train_set, self.__test_set).draw()
         DatasetHistogramDiagram(self.__train_set, self.__test_set).draw()
+
+    def learn(self) -> None:
+        """
+        Public method to learn from the training dataset.
+        """
+        logger.debug("Training the Prediction Model.")
+        self.__accuracy, self.__sample_x,\
+            self.__sample_y, self.__sample_y_hat = self.__model.learn(self.__train_set,
+                                                                      self.__test_set)
+
 
 if __name__ == "__main__":
 
     # Printing logs to console.
     # Reference: https://stackoverflow.com/questions/14058453
-    logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    # handler = logging.StreamHandler(sys.stdout)
+    # handler.setLevel(logging.DEBUG)
+    # formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s - %(message)s')
+    # handler.setFormatter(formatter)
+    # logger.addHandler(handler)
 
     # Running Main handler.
     Main.run()
