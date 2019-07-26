@@ -1,6 +1,6 @@
 # Belgium
 Implementation of TensorFlow in Python.
-This system is intended to analyze Belgium traffic data.
+This app is intended to analyze Belgium traffic (image) data.
 
 ## References
 - [TensorFlow Installation](https://www.tensorflow.org/install/pip)
